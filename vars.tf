@@ -27,3 +27,21 @@ variable "private_subnet_cidr" {
   type        = string
   default     = "10.0.20.0/24"
 }
+
+var zone {
+  description = "GCP zone"
+  type        = string
+  default     = "us-central1-a"
+}
+
+var instance_name {
+  description = "Name for the compute instance"
+  type        = string
+  default     = "dbs-project-network-instance"
+}
+
+var machine_type {
+  description = "Machine type for the compute instance"
+  type        = string
+  default     = "e2-medium"
+}

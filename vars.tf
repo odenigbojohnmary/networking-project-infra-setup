@@ -49,7 +49,7 @@ variable "machine_type" {
 variable "boot_image" {
   description = "Boot disk image"
   type        = string
-  default     = "ubuntu-2404-lts"
+  default     = "ubuntu-2404-lts-amd64"
 }
  
 variable "boot_disk_size_gb" {

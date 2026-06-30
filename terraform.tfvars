@@ -1,0 +1,6 @@
+db_instance_name = "dbs-mysql"
+db_version       = "MYSQL_8_0"
+db_tier          = "db-f1-micro"
+db_name          = "appdb"
+db_user          = "appuser"
+db_password      = "AppUserPass123!r54657"

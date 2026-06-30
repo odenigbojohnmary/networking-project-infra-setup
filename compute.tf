@@ -42,17 +42,29 @@ resource "google_compute_instance" "vm" {
       # Ephemeral public IP
     }
   }
-
   metadata = {
-    startup-script = file("${path.module}/startup.sh")
+    startup-script      = file("${path.module}/startup.sh")
+    startup-script-hash = local.startup_script_hash
   }
-
+ 
   service_account {
     scopes = ["cloud-platform"]
   }
 
-  labels = {
-    managed-by = "terraform"
-    role       = "docker-nginx-host"
+
+  llabels = {
+    managed-by          = "terraform"
+    role                = "docker-nginx-host"
+    startup-script-hash = substr(local.startup_script_hash, 0, 8)
+  }
+ 
+  lifecycle {
+    replace_triggered_by = [terraform_data.startup_script_hash]
   }
 }
+ 
+# Tracks startup script content — any change triggers instance replacement
+resource "terraform_data" "startup_script_hash" {
+  input = local.startup_script_hash
+}
+

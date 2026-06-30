@@ -1,6 +1,6 @@
 terraform {
   backend "gcs" {
-    bucket = "my-terraform-state-bucket"
+    bucket = "dbs-network-terraform-state"
     prefix = "prod"
   }
 }

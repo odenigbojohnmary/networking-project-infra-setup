@@ -45,3 +45,22 @@ var machine_type {
   type        = string
   default     = "e2-medium"
 }
+
+variable "boot_image" {
+  description = "Boot disk image"
+  type        = string
+  default     = "ubuntu-accel-2404-amd64-tpu-tpu7x"
+}
+ 
+variable "boot_disk_size_gb" {
+  description = "Boot disk size in GB"
+  type        = number
+  default     = 30
+}
+ 
+variable "boot_disk_type" {
+  description = "Boot disk type"
+  type        = string
+  default     = "pd-balanced"
+}
+ 

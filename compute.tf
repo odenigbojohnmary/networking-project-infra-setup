@@ -5,14 +5,14 @@
 
 resource "google_compute_firewall" "allow_http_https_ssh" {
   name    = "${var.instance_name}-allow-web-ssh"
-  network = var.network
+  network = google_compute_network.vpc.id
 
   allow {
     protocol = "tcp"
     ports    = ["22", "80", "443"]
   }
 
-  source_ranges = var.allowed_source_ranges
+  source_ranges = "0.0.0.0/0"
   target_tags   = [var.instance_name]
 }
 

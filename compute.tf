@@ -12,7 +12,7 @@ resource "google_compute_firewall" "allow_http_https_ssh" {
     ports    = ["22", "80", "443"]
   }
 
-  source_ranges = ["0.0.0.0/0"]
+  source_ranges = ["0.0.0.0/0", ]
   target_tags   = [var.instance_name]
 }
 

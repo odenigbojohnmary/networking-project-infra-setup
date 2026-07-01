@@ -48,20 +48,3 @@ resource "google_sql_user" "app_user" {
   password = var.db_password
   host     = "%"
 }
-
-# ---------------------------------------------------------------------------
-# Outputs
-# ---------------------------------------------------------------------------
-
-output "db_instance_name" {
-  value = google_sql_database_instance.mysql.name
-}
-
-output "db_private_ip" {
-  value       = google_sql_database_instance.mysql.private_ip_address
-  description = "Private IP of the MySQL instance — accessible only from within the VPC"
-}
-
-output "db_connection_name" {
-  value = google_sql_database_instance.mysql.connection_name
-}

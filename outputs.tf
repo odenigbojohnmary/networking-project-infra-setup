@@ -18,15 +18,15 @@ output "private_subnet_id" {
 
 
 output "instance_name" {
-  value = google_compute_instance.vm.name
+  value = google_compute_instance.db-project-instance.name
 }
 
 output "instance_public_ip" {
-  value = google_compute_instance.vm.network_interface[0].access_config[0].nat_ip
+  value = google_compute_instance.db-project-instance.network_interface[0].access_config[0].nat_ip
 }
 
 output "instance_self_link" {
-  value = google_compute_instance.vm.self_link
+  value = google_compute_instance.db-project-instance.self_link
 }
 
 # Outputs database instance details

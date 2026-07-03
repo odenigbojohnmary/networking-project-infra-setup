@@ -93,10 +93,9 @@ variable "ssh_user" {
   default     = "ubuntu"
 }
 
-variable "ssh_pub_key_path" {
-  description = "Path to the local public SSH key injected into the VM metadata."
+variable "ssh_public_key" {
+  description = "Contents of the SSH public key injected into the VM metadata (e.g. contents of id_rsa.pub). Passed as a string, not a file path, so it works both locally (via terraform.tfvars) and in GitHub Actions (via the TF_VAR_ssh_public_key environment variable, sourced from the SSH_PUBLIC_KEY repository secret)."
   type        = string
-  default     = "~/.ssh/id_rsa.pub"
 }
 
 variable "app_port" {

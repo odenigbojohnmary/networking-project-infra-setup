@@ -45,7 +45,7 @@ resource "google_compute_instance" "db-project-instance" {
   metadata = {
     # startup-script      = file("${path.module}/startup.sh")
     # startup-script-hash = local.startup_script_hash
-    ssh-keys = "${var.ssh_user}:${file(var.ssh_pub_key_path)}"
+    ssh-keys = "${var.ssh_user}:${var.ssh_public_key}"
   }
  
   service_account {

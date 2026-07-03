@@ -52,15 +52,19 @@ jobs:
           terraform_version: ${{ env.TF_VERSION }}
 
       - name: Terraform Format Check
+        working-directory: terraform
         run: terraform fmt -check -recursive
 
       - name: Terraform Init
+        working-directory: terraform
         run: terraform init
 
       - name: Terraform Validate
+        working-directory: terraform
         run: terraform validate
 
       - name: Terraform Plan
+        working-directory: terraform
         env:
           TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
         run: |
@@ -69,6 +73,7 @@ jobs:
             -input=false
 
       - name: Save Plan Output
+        working-directory: terraform
         run: |
           terraform show -no-color tfplan > plan.txt
 
@@ -77,7 +82,7 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            const plan = fs.readFileSync('plan.txt', 'utf8');
+            const plan = fs.readFileSync('terraform/plan.txt', 'utf8');
 
             github.rest.issues.createComment({
               owner: context.repo.owner,
@@ -92,6 +97,9 @@ jobs:
 
     environment:
       name: production
+
+    outputs:
+      instance_ip: ${{ steps.tf_outputs.outputs.instance_ip }}
 
     steps:
       - name: Checkout
@@ -143,24 +151,23 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Ansible and Docker collection
+      - name: Install Ansible
         run: |
           python3 -m pip install --upgrade pip
           pip install ansible
-          ansible-galaxy collection install community.docker
 
       - name: Configure SSH key
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.GCP_VM_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H "${{ needs.terraform.outputs.instance_ip }}" >> ~/.ssh/known_hosts
+          ssh-keyscan -H "${{ needs.terraform-apply.outputs.instance_ip }}" >> ~/.ssh/known_hosts
 
       - name: Generate inventory from Terraform output
         run: |
           cat > ansible/inventory.ini << EOI
           [webservers]
-          dbs-network-project-server ansible_host=${{ needs.terraform.outputs.instance_ip }} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_rsa
+          dbs-network-project-server ansible_host=${{ needs.terraform-apply.outputs.instance_ip }} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_rsa
 
           [webservers:vars]
           ansible_python_interpreter=/usr/bin/python3
@@ -169,7 +176,7 @@ jobs:
       - name: Wait for SSH to come up on the new VM
         run: |
           for i in {1..15}; do
-            ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ubuntu@${{ needs.terraform.outputs.instance_ip }} true && break
+            ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ubuntu@${{ needs.terraform-apply.outputs.instance_ip }} true && break
             echo "Waiting for SSH..."; sleep 10
           done
 
@@ -179,5 +186,5 @@ jobs:
 
       - name: Print resulting VM address
         run: |
-          echo "VM is provisioned and configured at ${{ needs.terraform.outputs.instance_ip }}"
+          echo "VM is provisioned and configured at ${{ needs.terraform-apply.outputs.instance_ip }}"
           echo "Set this as the GCP_VM_HOST repository secret so deploy-app.yml can reach it."

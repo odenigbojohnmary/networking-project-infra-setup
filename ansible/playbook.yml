@@ -1,33 +1,16 @@
 ---
-# Part 2 - Configuration Management / Part 3-4 - Application Deployment
-#
-# A single playbook, split into two tag groups, so there is one source of
-# truth for "what does a correctly configured host look like":
-#
-#   --tags configure   Installs Docker Engine and enables it on boot.
-#                       Run by .github/workflows/infra.yml, immediately
-#                       after `terraform apply` provisions the VM.
-#
-#   --tags deploy       Pulls the latest application image and (re)starts
-#                       the container. Run by .github/workflows/deploy-app.yml
-#                       on every push to the application code.
-#
-# Running the whole file with no --tags performs both in sequence, which is
-# still useful for a first-time manual bring-up of a brand new VM.
+# Part 2 - Configuration Management
+# Installs and enables Docker and nginx on the VM.
 
-- name: Configure DevOps server and deploy sample application
+- name: Configure DevOps server (Docker host + nginx reverse proxy)
   hosts: webservers
   become: true
   vars:
-    docker_compose_version: "v2.29.2"
-    app_image: "ghcr.io/OWNER/dbs-flask-app:latest"   # overridden by CI/CD at deploy time
-    app_container_name: "dbs-flask-app"
-    app_host_port: 5000
-    app_container_port: 5000
+    app_upstream_port: 5000
 
   tasks:
     # ---------------------------------------------------------------
-    # tag: configure - infrastructure/configuration layer (Part 2)
+    # Docker Engine
     # ---------------------------------------------------------------
     - name: Update apt package cache
       apt:
@@ -106,36 +89,49 @@
       tags: [configure]
 
     # ---------------------------------------------------------------
-    # tag: deploy - application deployment layer (Part 3 / Part 4)
+    # nginx — reverse proxy from :80 to the app's expected port (:5000)
     # ---------------------------------------------------------------
-    - name: Log in to GitHub Container Registry (uses secrets injected by CI/CD)
-      community.docker.docker_login:
-        registry_url: ghcr.io
-        username: "{{ lookup('env', 'REGISTRY_USER') }}"
-        password: "{{ lookup('env', 'REGISTRY_TOKEN') }}"
-      when: lookup('env', 'REGISTRY_TOKEN') != ''
-      no_log: true
-      tags: [deploy]
+    - name: Install nginx
+      apt:
+        name: nginx
+        state: present
+      tags: [configure]
 
-    - name: Pull the latest application image
-      community.docker.docker_image:
-        name: "{{ app_image }}"
-        source: pull
-        force_source: true
-      tags: [deploy]
-
-    - name: Remove any previous application container
-      community.docker.docker_container:
-        name: "{{ app_container_name }}"
+    - name: Remove default nginx site
+      file:
+        path: /etc/nginx/sites-enabled/default
         state: absent
-      tags: [deploy]
+      notify: Reload nginx
+      tags: [configure]
 
-    - name: Run the containerised Flask application
-      community.docker.docker_container:
-        name: "{{ app_container_name }}"
-        image: "{{ app_image }}"
+    - name: Template the reverse proxy site config
+      template:
+        src: templates/app-proxy.conf.j2
+        dest: /etc/nginx/sites-available/app-proxy.conf
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Reload nginx
+      tags: [configure]
+
+    - name: Enable the reverse proxy site
+      file:
+        src: /etc/nginx/sites-available/app-proxy.conf
+        dest: /etc/nginx/sites-enabled/app-proxy.conf
+        state: link
+      notify: Reload nginx
+      tags: [configure]
+
+    - name: Enable and start nginx service (starts automatically on boot)
+      systemd:
+        name: nginx
+        enabled: true
         state: started
-        restart_policy: always
-        published_ports:
-          - "{{ app_host_port }}:{{ app_container_port }}"
-      tags: [deploy]
+        daemon_reload: true
+      tags: [configure]
+
+  handlers:
+    - name: Reload nginx
+      systemd:
+        name: nginx
+        state: reloaded

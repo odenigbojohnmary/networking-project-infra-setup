@@ -1,4 +1,5 @@
-# Terraform Configuration for GCP 
+# Terraform Configuration for GCP
+
 terraform {
   required_providers {
     google = {
@@ -9,6 +10,7 @@ terraform {
 }
 
 # Terraform provider configuration
+
 provider "google" {
   project = var.project_id
   region  = var.region

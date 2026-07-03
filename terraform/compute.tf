@@ -1,7 +1,4 @@
-
-# ---------------------------------------------------------------------------
 # Network (uses default VPC; override with var.network/var.subnetwork if needed)
-# ---------------------------------------------------------------------------
 
 resource "google_compute_firewall" "allow_http_https_ssh" {
   name    = "${var.instance_name}-allow-web-ssh"
@@ -16,9 +13,7 @@ resource "google_compute_firewall" "allow_http_https_ssh" {
   target_tags   = ["${var.instance_name}-project-instance"]
 }
 
-# ---------------------------------------------------------------------------
 # Compute Instance (e2 series)
-# ---------------------------------------------------------------------------
 
 resource "google_compute_instance" "db-project-instance" {
   name         = var.instance_name

@@ -100,6 +100,7 @@ jobs:
 
     outputs:
       instance_ip: ${{ steps.tf_outputs.outputs.instance_ip }}
+      db_private_ip: ${{ steps.tf_outputs.outputs.db_private_ip }}
 
     steps:
       - name: Checkout
@@ -138,53 +139,77 @@ jobs:
           TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
         run: terraform apply -auto-approve tfplan
       
-      - name: Capture VM public IP
+      - name: Capture VM addresses
         id: tf_outputs
         working-directory: terraform
-        run: echo "instance_ip=$(terraform output -raw instance_public_ip)" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "instance_ip=$(terraform output -raw instance_public_ip)" >> "$GITHUB_OUTPUT"
+          echo "db_private_ip=$(terraform output -raw db_instance_private_ip)" >> "$GITHUB_OUTPUT"
 
   configure:
-    name: Ansible configure (install and enable Docker and nginx on the VM)
+    name: Ansible configure (Docker+nginx on app VM, MySQL on private DB VM)
     needs: terraform-apply
     runs-on: ubuntu-latest
+    env:
+      APP_IP: ${{ needs.terraform-apply.outputs.instance_ip }}
+      DB_IP: ${{ needs.terraform-apply.outputs.db_private_ip }}
+      DB_NAME: ${{ secrets.DB_NAME }}
+      DB_USER: ${{ secrets.DB_USER }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Ansible
+      - name: Install Ansible and required collections
         run: |
           python3 -m pip install --upgrade pip
-          pip install ansible
+          pip install ansible pymysql
+          ansible-galaxy collection install -r ansible/requirements.yml
 
       - name: Configure SSH key
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.GCP_VM_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H "${{ needs.terraform-apply.outputs.instance_ip }}" >> ~/.ssh/known_hosts
+          ssh-keyscan -H "$APP_IP" >> ~/.ssh/known_hosts
 
       - name: Generate inventory from Terraform output
         run: |
           cat > ansible/inventory.ini << EOI
           [webservers]
-          dbs-network-project-server ansible_host=${{ needs.terraform-apply.outputs.instance_ip }} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_rsa
+          dbs-app-server ansible_host=${APP_IP} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_rsa
 
-          [webservers:vars]
+          [dbservers]
+          dbs-db-server ansible_host=${DB_IP} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_rsa
+
+          [dbservers:vars]
+          ansible_ssh_common_args=-o ProxyCommand="ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -W %h:%p ubuntu@${APP_IP}"
+
+          [all:vars]
           ansible_python_interpreter=/usr/bin/python3
           EOI
 
-      - name: Wait for SSH to come up on the new VM
+      - name: Wait for SSH to come up on the app VM
         run: |
           for i in {1..15}; do
-            ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ubuntu@${{ needs.terraform-apply.outputs.instance_ip }} true && break
-            echo "Waiting for SSH..."; sleep 10
+            ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ubuntu@"$APP_IP" true && break
+            echo "Waiting for SSH on app VM..."; sleep 10
           done
 
-      - name: Run Ansible playbook (configure tag only - installs Docker, enables on boot)
+      - name: Wait for SSH to come up on the private DB VM (via ProxyJump through the app VM)
+        run: |
+          for i in {1..15}; do
+            ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
+              -o ProxyCommand="ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -W %h:%p ubuntu@${APP_IP}" \
+              ubuntu@"$DB_IP" true && break
+            echo "Waiting for SSH on DB VM..."; sleep 10
+          done
+
+      - name: Run Ansible playbook (configure tag only - Docker+nginx on app VM, MySQL on DB VM)
         working-directory: ansible
         run: ansible-playbook -i inventory.ini playbook.yml --tags configure
 
-      - name: Print resulting VM address
+      - name: Print resulting VM addresses
         run: |
-          echo "VM is provisioned and configured at ${{ needs.terraform-apply.outputs.instance_ip }}"
-          echo "Set this as the GCP_VM_HOST repository secret so deploy-app.yml can reach it."
+          echo "App VM (public):  $APP_IP"
+          echo "DB VM (private):  $DB_IP  — reachable only from inside the VPC"

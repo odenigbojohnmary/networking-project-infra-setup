@@ -8,15 +8,15 @@ variable "project_id" {
 }
  
 variable "region" {
-  description = "GCP region"
+  description = "GCP region. us-central1 is one of only three regions (with us-west1, us-east1) eligible for GCP's Always Free e2-micro instance, and is generally GCP's cheapest region overall."
   type        = string
-  default     = "europe-west1"
+  default     = "us-central1"
 }
- 
+
 variable "zone" {
   description = "GCP zone"
   type        = string
-  default     = "europe-west1-c"
+  default     = "us-central1-a"
 }
 
 # ---------------------------------------------------------------------------
@@ -105,59 +105,48 @@ variable "app_port" {
 }
  
  # ---------------------------------------------------------------------------
-# Cloud SQL — MySQL
+# Database — self-managed MySQL on a private Compute Engine VM
 # ---------------------------------------------------------------------------
- 
+# Cloud SQL's private-IP feature requires either VPC Peering or Private
+# Service Connect, both of which need GCP IAM permissions beyond plain
+# Compute Engine access, and both add cost on top of the instance itself.
+# A self-managed MySQL install on a private-subnet VM avoids both, reuses
+# the Compute Engine permissions that already work for the app VM, and is
+# cheaper. Ansible (not Terraform) installs and configures MySQL — see
+# ansible/playbook.yml.
+
 variable "db_instance_name" {
-  description = "Name of the Cloud SQL instance"
+  description = "Name of the private database VM"
   type        = string
   default     = "dbs-mysql"
 }
- 
-variable "db_version" {
-  description = "MySQL version"
+
+variable "db_machine_type" {
+  description = "Machine type for the database VM"
   type        = string
-  default     = "MYSQL_8_0"
+  default     = "e2-small"
 }
- 
-variable "db_tier" {
-  description = "Cloud SQL machine tier"
-  type        = string
-  default     = "db-f1-micro"
-}
- 
-variable "db_availability_type" {
-  description = "ZONAL or REGIONAL (REGIONAL = high availability)"
-  type        = string
-  default     = "ZONAL"
-}
- 
-variable "db_disk_size_gb" {
-  description = "Cloud SQL disk size in GB"
+
+variable "db_boot_disk_size_gb" {
+  description = "Boot disk size in GB for the database VM"
   type        = number
   default     = 20
 }
- 
+
 variable "db_name" {
-  description = "Name of the database to create"
+  description = "Name of the MySQL database Ansible creates on the DB VM"
   type        = string
   default     = "appdb"
 }
- 
+
 variable "db_user" {
-  description = "Database user"
+  description = "MySQL application user Ansible creates on the DB VM"
   type        = string
   default     = "appuser"
 }
- 
+
 variable "db_password" {
-  description = "Database password — pass via TF_VAR_db_password env var or secrets manager"
+  description = "Password for db_user — pass via TF_VAR_db_password / the DB_PASSWORD repository secret. Consumed by Ansible, not Terraform, but declared here so both tools read it from the same secret."
   type        = string
   sensitive   = true
-}
- 
-variable "db_deletion_protection" {
-  description = "Prevent accidental deletion of the DB instance"
-  type        = bool
-  default     = true
 }

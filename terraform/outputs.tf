@@ -16,7 +16,6 @@ output "private_subnet_id" {
 
 # Outputs compute instance details
 
-
 output "instance_name" {
   value = google_compute_instance.db-project-instance.name
 }
@@ -29,17 +28,13 @@ output "instance_self_link" {
   value = google_compute_instance.db-project-instance.self_link
 }
 
-# Outputs database instance details
+# Outputs database VM details
 
 output "db_instance_name" {
-  value = google_sql_database_instance.mysql.name
+  value = google_compute_instance.db_instance.name
 }
- 
-output "db_private_ip" {
-  value       = google_sql_database_instance.mysql.private_ip_address
-  description = "Private IP of the MySQL instance — accessible only from within the VPC"
-}
- 
-output "db_connection_name" {
-  value = google_sql_database_instance.mysql.connection_name
+
+output "db_instance_private_ip" {
+  value       = google_compute_instance.db_instance.network_interface[0].network_ip
+  description = "Private IP of the database VM — reachable only from within the VPC (e.g. via SSH ProxyJump through the app VM)."
 }

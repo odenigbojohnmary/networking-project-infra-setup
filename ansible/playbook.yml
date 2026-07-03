@@ -1,6 +1,8 @@
 ---
 # Part 2 - Configuration Management
-# Installs and enables Docker and nginx on the VM.
+# Installs and enables Docker and nginx on the app VM, and MySQL on the
+# private DB VM. Two plays, one file, so both hosts are configured by a
+# single `ansible-playbook playbook.yml`
 
 - name: Configure DevOps server (Docker host + nginx reverse proxy)
   hosts: webservers
@@ -135,3 +137,72 @@
       systemd:
         name: nginx
         state: reloaded
+
+# ---------------------------------------------------------------------------
+# Database VM — self-managed MySQL, private subnet, no public IP.
+# Reached from this Ansible run via SSH ProxyJump through the app VM.
+# ---------------------------------------------------------------------------
+
+- name: Configure database VM (MySQL)
+  hosts: dbservers
+  become: true
+  vars:
+    db_name: "{{ lookup('env', 'DB_NAME') | default('appdb', true) }}"
+    db_user: "{{ lookup('env', 'DB_USER') | default('appuser', true) }}"
+    db_password: "{{ lookup('env', 'DB_PASSWORD') }}"
+    db_allowed_host: "10.0.1.%"
+
+  tasks:
+    - name: Update apt package cache
+      apt:
+        update_cache: true
+        cache_valid_time: 3600
+      tags: [configure]
+
+    - name: Install MySQL server and Python MySQL client library
+      apt:
+        name:
+          - mysql-server
+          - python3-pymysql
+        state: present
+      tags: [configure]
+
+    - name: Enable and start MySQL service (starts automatically on boot)
+      systemd:
+        name: mysql
+        enabled: true
+        state: started
+        daemon_reload: true
+      tags: [configure]
+
+    - name: Allow MySQL to listen on the VM's private interface, not just localhost
+      lineinfile:
+        path: /etc/mysql/mysql.conf.d/mysqld.cnf
+        regexp: "^bind-address"
+        line: "bind-address = 0.0.0.0"
+      notify: Restart MySQL
+      tags: [configure]
+
+    - name: Create the application database
+      community.mysql.mysql_db:
+        name: "{{ db_name }}"
+        state: present
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+      tags: [configure]
+
+    - name: Create the application database user, scoped to the public subnet
+      community.mysql.mysql_user:
+        name: "{{ db_user }}"
+        password: "{{ db_password }}"
+        host: "{{ db_allowed_host }}"
+        priv: "{{ db_name }}.*:ALL"
+        state: present
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+      no_log: true
+      tags: [configure]
+
+  handlers:
+    - name: Restart MySQL
+      systemd:
+        name: mysql
+        state: restarted

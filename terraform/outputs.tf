@@ -38,3 +38,10 @@ output "db_instance_private_ip" {
   value       = google_compute_instance.db_instance.network_interface[0].network_ip
   description = "Private IP of the database VM — reachable only from within the VPC (e.g. via SSH ProxyJump through the app VM)."
 }
+
+# Outputs Artifact Registry details
+
+output "artifact_registry_repository" {
+  value       = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.app_images.repository_id}"
+  description = "Full path prefix for pushing/pulling images, e.g. <this>/statuswatch:latest"
+}

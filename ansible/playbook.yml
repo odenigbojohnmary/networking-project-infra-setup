@@ -90,9 +90,7 @@
       changed_when: false
       tags: [configure]
 
-    # ---------------------------------------------------------------
     # nginx — reverse proxy from :80 to the app's expected port (:5000)
-    # ---------------------------------------------------------------
     - name: Install nginx
       apt:
         name: nginx
@@ -138,10 +136,8 @@
         name: nginx
         state: reloaded
 
-# ---------------------------------------------------------------------------
 # Database VM — self-managed MySQL, private subnet, no public IP.
 # Reached from this Ansible run via SSH ProxyJump through the app VM.
-# ---------------------------------------------------------------------------
 
 - name: Configure database VM (MySQL)
   hosts: dbservers

@@ -10,13 +10,13 @@ variable "project_id" {
 variable "region" {
   description = "GCP region"
   type        = string
-  default     = "us-central1"
+  default     = "europe-west1"
 }
  
 variable "zone" {
   description = "GCP zone"
   type        = string
-  default     = "us-central1-c"
+  default     = "europe-west1-c"
 }
 
 # ---------------------------------------------------------------------------
@@ -66,7 +66,7 @@ variable "instance_name" {
 variable "machine_type" {
   description = "Machine type for the compute instance"
   type        = string
-  default     = "e2-medium"
+  default     = "e2-micro"
 }
 
 variable "boot_image" {
@@ -85,6 +85,24 @@ variable "boot_disk_type" {
   description = "Boot disk type"
   type        = string
   default     = "pd-balanced"
+}
+
+variable "ssh_user" {
+  description = "Username used for SSH / Ansible access."
+  type        = string
+  default     = "ubuntu"
+}
+
+variable "ssh_pub_key_path" {
+  description = "Path to the local public SSH key injected into the VM metadata."
+  type        = string
+  default     = "~/.ssh/id_rsa.pub"
+}
+
+variable "app_port" {
+  description = "Host port on which the containerised Flask application is published."
+  type        = number
+  default     = 5000
 }
  
  # ---------------------------------------------------------------------------

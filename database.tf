@@ -35,7 +35,7 @@ resource "google_sql_database_instance" "mysql" {
   depends_on = [google_service_networking_connection.private_vpc_connection]
 }
 
-resource "google_sql_database" "db" {
+resource "google_sql_database" "dbs-appdb" {
   name     = var.db_name
   instance = google_sql_database_instance.mysql.name
   charset  = "utf8mb4"
@@ -47,4 +47,39 @@ resource "google_sql_user" "app_user" {
   instance = google_sql_database_instance.mysql.name
   password = var.db_password
   host     = "%"
+}
+ 
+ 
+# ---------------------------------------------------------------------------
+# Private Services Access (required for Cloud SQL private IP)
+# ---------------------------------------------------------------------------
+ 
+resource "google_compute_global_address" "private_ip_range" {
+  name          = "${var.vpc_name}-private-ip-range"
+  purpose       = "VPC_PEERING"
+  address_type  = "INTERNAL"
+  prefix_length = 16
+  network       = google_compute_network.vpc.id
+}
+ 
+resource "google_service_networking_connection" "private_vpc_connection" {
+  network                 = google_compute_network.vpc.id
+  service                 = "servicenetworking.googleapis.com"
+  reserved_peering_ranges = [google_compute_global_address.private_ip_range.name]
+ 
+  depends_on = [google_project_service.servicenetworking]
+}
+ 
+# ---------------------------------------------------------------------------
+# Required APIs
+# ---------------------------------------------------------------------------
+ 
+resource "google_project_service" "servicenetworking" {
+  service            = "servicenetworking.googleapis.com"
+  disable_on_destroy = false
+}
+ 
+resource "google_project_service" "sqladmin" {
+  service            = "sqladmin.googleapis.com"
+  disable_on_destroy = false
 }

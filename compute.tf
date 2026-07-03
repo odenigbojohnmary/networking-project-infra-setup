@@ -9,22 +9,22 @@ resource "google_compute_firewall" "allow_http_https_ssh" {
 
   allow {
     protocol = "tcp"
-    ports    = ["22", "80", "443"]
+    ports    = ["22", "80", "443", tostring(var.app_port)]
   }
 
-  source_ranges = ["0.0.0.0/0", ]
-  target_tags   = [var.instance_name]
+  source_ranges = ["0.0.0.0/0"]
+  target_tags   = ["${var.instance_name}-project-instance"]
 }
 
 # ---------------------------------------------------------------------------
 # Compute Instance (e2 series)
 # ---------------------------------------------------------------------------
 
-resource "google_compute_instance" "vm" {
+resource "google_compute_instance" "db-project-instance" {
   name         = var.instance_name
-  machine_type = var.machine_type # e.g. e2-medium
+  machine_type = var.machine_type
   zone         = var.zone
-  tags         = [var.instance_name]
+  tags         = ["${var.instance_name}-project-instance", "public"]
 
   boot_disk {
     initialize_params {
@@ -43,28 +43,31 @@ resource "google_compute_instance" "vm" {
     }
   }
   metadata = {
-    startup-script      = file("${path.module}/startup.sh")
-    startup-script-hash = local.startup_script_hash
+    # startup-script      = file("${path.module}/startup.sh")
+    # startup-script-hash = local.startup_script_hash
+    ssh-keys = "${var.ssh_user}:${file(var.ssh_pub_key_path)}"
   }
  
   service_account {
     scopes = ["cloud-platform"]
   }
 
+  metadata_startup_script = "apt-get update -y"
 
-  llabels = {
+
+  labels = {
     managed-by          = "terraform"
-    role                = "docker-nginx-host"
-    startup-script-hash = substr(local.startup_script_hash, 0, 8)
+    project             = "dbs-networking-assignment"
+    # startup-script-hash = substr(local.startup_script_hash, 0, 8)
   }
  
-  lifecycle {
-    replace_triggered_by = [terraform_data.startup_script_hash]
-  }
+  # lifecycle {
+  #   replace_triggered_by = [terraform_data.startup_script_hash]
+  # }
 }
  
 # Tracks startup script content — any change triggers instance replacement
-resource "terraform_data" "startup_script_hash" {
-  input = local.startup_script_hash
-}
+# resource "terraform_data" "startup_script_hash" {
+#   input = local.startup_script_hash
+# }
 

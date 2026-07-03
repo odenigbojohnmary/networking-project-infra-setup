@@ -1,13 +1,23 @@
 name: Terraform
 
 on:
-  pull_request:
-    branches:
-      - main
-
   push:
     branches:
       - main
+    paths:
+      - "terraform/**"
+      - ".github/workflows/terraform.yml"
+      - "ansible/playbook.yml"
+
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "terraform/**"
+      - ".github/workflows/terraform.yml"
+      - "ansible/playbook.yml"
+
+  workflow_dispatch: {}
 
 permissions:
   contents: read
@@ -16,6 +26,8 @@ permissions:
 
 env:
   TF_VERSION: "1.9.8"
+  TF_VAR_project_id: ${{ secrets.GCP_PROJECT_ID }}
+  TF_VAR_ssh_public_key: ${{ secrets.SSH_PUBLIC_KEY }}
 
 jobs:
   terraform-plan:
@@ -49,6 +61,8 @@ jobs:
         run: terraform validate
 
       - name: Terraform Plan
+        env:
+          TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
         run: |
           terraform plan \
             -out=tfplan \
@@ -97,15 +111,73 @@ jobs:
           terraform_version: ${{ env.TF_VERSION }}
 
       - name: Terraform Init
+        working-directory: terraform
         run: terraform init
 
       - name: Terraform Validate
+        working-directory: terraform
         run: terraform validate
 
       - name: Terraform Plan
+        working-directory: terraform
+        env:
+          TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
         run: terraform plan -out=tfplan -input=false
 
       - name: Terraform Apply
+        working-directory: terraform
         env:
           TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
         run: terraform apply -auto-approve tfplan
+      
+      - name: Capture VM public IP
+        id: tf_outputs
+        working-directory: terraform
+        run: echo "instance_ip=$(terraform output -raw instance_public_ip)" >> "$GITHUB_OUTPUT"
+
+  configure:
+    name: Ansible configure (install and enable Docker and nginx on the VM)
+    needs: terraform-apply
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Ansible and Docker collection
+        run: |
+          python3 -m pip install --upgrade pip
+          pip install ansible
+          ansible-galaxy collection install community.docker
+
+      - name: Configure SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.GCP_VM_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H "${{ needs.terraform.outputs.instance_ip }}" >> ~/.ssh/known_hosts
+
+      - name: Generate inventory from Terraform output
+        run: |
+          cat > ansible/inventory.ini << EOI
+          [webservers]
+          dbs-network-project-server ansible_host=${{ needs.terraform.outputs.instance_ip }} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_rsa
+
+          [webservers:vars]
+          ansible_python_interpreter=/usr/bin/python3
+          EOI
+
+      - name: Wait for SSH to come up on the new VM
+        run: |
+          for i in {1..15}; do
+            ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ubuntu@${{ needs.terraform.outputs.instance_ip }} true && break
+            echo "Waiting for SSH..."; sleep 10
+          done
+
+      - name: Run Ansible playbook (configure tag only - installs Docker, enables on boot)
+        working-directory: ansible
+        run: ansible-playbook -i inventory.ini playbook.yml --tags configure
+
+      - name: Print resulting VM address
+        run: |
+          echo "VM is provisioned and configured at ${{ needs.terraform.outputs.instance_ip }}"
+          echo "Set this as the GCP_VM_HOST repository secret so deploy-app.yml can reach it."
